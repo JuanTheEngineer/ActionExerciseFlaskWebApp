@@ -15,7 +15,7 @@
 <template id="home.html">
   <ons-page>
     <ons-toolbar>
-      <div class="center">Inertia Workouts</div>
+      <div class="center">Action Workouts</div>
     </ons-toolbar>
     <ons-tabbar>
       <ons-tab label="Home" icon="md-home" page="index.html" active></ons-tab>
@@ -61,12 +61,10 @@
       const container = page.querySelector('#plans-container');
       const spinner = page.querySelector('#loading-spinner');
 
-      // Fetch data
       fetch('/static/workouts.json').then(r => r.json()).then(workouts => {
         fetch('/static/plans.json').then(r => r.json()).then(plans => {
           spinner.style.display = 'none';
 
-          // Intro paragraph
           const intro = document.createElement('ons-card');
           intro.innerHTML = `
             <div class="title">Workout Class</div>
@@ -78,10 +76,9 @@
             </div>`;
           container.appendChild(intro);
 
-          // Render each plan
           plans.plans.forEach(plan => {
             const card = document.createElement('ons-card');
-            card.id = plan.name.toLowerCase(); // anchor
+            card.id = plan.name.toLowerCase();
             card.innerHTML = `<div class="title">${plan.name}</div><div class="content"><p>${plan.description}</p></div>`;
 
             plan.subPlans.forEach(sub => {
@@ -145,7 +142,16 @@
     <ons-toolbar>
       <div class="center">Programs</div>
     </ons-toolbar>
-    <ons-list id="program-list"></ons-list>
+
+    <div style="padding: 16px;">
+      <ons-search-input
+        id="program-search"
+        placeholder="Search programs..."
+        style="margin-bottom: 12px; display: block; height: 44px;"
+      ></ons-search-input>
+
+      <div id="program-card-list"></div>
+    </div>
   </ons-page>
 </template>
 
@@ -156,10 +162,17 @@
       <div class="left"><ons-back-button>Programs</ons-back-button></div>
       <div class="center" id="program-title">Program Details</div>
     </ons-toolbar>
-    <div id="page" class="content">
-      <h1 id="program-name"></h1>
-      <p id="program-requirements"></p>
-      <div class="timeline-container"><div id="timeline" class="timeline"></div></div>
+
+    <div style="padding: 12px;">
+      <ons-card>
+        <h1 id="program-name" style="margin-bottom: 4px;"></h1>
+        <p id="program-requirements" style="margin-top: 0; color: #666;"></p>
+      </ons-card>
+
+      <div class="timeline-container" style="margin-top: 12px;">
+        <div id="timeline" class="timeline" style="display: flex; justify-content: space-between;"></div>
+      </div>
+
       <div id="exercise-list"></div>
     </div>
   </ons-page>
@@ -184,85 +197,242 @@
   </ons-page>
 </template>
 
+<style>
+  .timeline-container {
+  padding: 12px 15px;
+  background-color: #f5f5f5;
+  border-bottom: 1px solid #ddd;
+  margin-bottom: 12px;
+}
+
+.timeline {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: relative;
+  height: 30px;
+}
+
+.timeline::before {
+  content: "";
+  position: absolute;
+  height: 3px;
+  background-color: #ddd;
+  top: 50%;
+  left: 0;
+  right: 0;
+  transform: translateY(-50%);
+  z-index: 1;
+}
+
+.dot {
+  width: 15px;
+  height: 15px;
+  background-color: #ddd;
+  border-radius: 50%;
+  position: relative;
+  z-index: 2;
+}
+
+.dot.active {
+  width: 22px;
+  height: 22px;
+  background-color: #666;
+}
+
+.dot.completed {
+  background-color: #aaa;
+}
+
+.dot.completed::after {
+  content: "✓";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 10px;
+}
+
+.exercise-item.completed .exercise-status {
+  background-color: #aaa;
+}
+
+.exercise-item.completed .exercise-status::after {
+  content: "✓";
+  color: white;
+  font-size: 10px;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+</style>
+
 <script>
   document.addEventListener('init', function(event) {
     const page = event.target;
 
     if (page.id === 'programs-page') {
+      const searchInput = page.querySelector('#program-search');
+      const cardList = page.querySelector('#program-card-list');
+
       fetch('/static/workouts.json')
         .then(r => r.json())
         .then(data => {
-          const list = page.querySelector('#program-list');
-          data.programs.forEach(program => {
-            const item = document.createElement('ons-list-item');
-            item.setAttribute('tappable', '');
-            item.innerHTML = `<div class="center">${program.title}</div>`;
-            item.onclick = () => document.querySelector('#navigator').pushPage('program.html', {data: {program}});
-            list.appendChild(item);
-          });
-        });
-    }
-
-    if (page.id === 'start-page') {
-      fetch('/static/workouts.json').then(r => r.json()).then(workouts => {
-        fetch('/static/plans.json').then(r => r.json()).then(plans => {
-          const list = page.querySelector('#plans-list');
-          plans.plans.forEach(plan => {
-            const header = document.createElement('ons-list-header');
-            header.textContent = plan.name;
-            list.appendChild(header);
-            plan.subPlans.forEach(sub => {
-              sub.programs.forEach(pid => {
-                const program = workouts.programs.find(p => p.id === pid);
-                if (program) {
-                  const item = document.createElement('ons-list-item');
-                  item.setAttribute('tappable', '');
-                  item.innerHTML = `<div class="center">${program.title}</div>`;
-                  item.onclick = () => document.querySelector('#navigator').pushPage('program.html', {data: {program}});
-                  list.appendChild(item);
-                }
+          const render = (filter = '') => {
+            cardList.innerHTML = '';
+            data.programs
+              .filter(p => p.title.toLowerCase().includes(filter.toLowerCase()))
+              .forEach(program => {
+                const card = document.createElement('ons-card');
+                card.style.cursor = 'pointer';
+                card.style.marginBottom = '12px';
+                card.innerHTML = `
+                  <div class="title">${program.title}</div>
+                  <div class="content">Requirements: ${program.requirements}</div>
+                `;
+                card.onclick = () => {
+                  document.querySelector('#navigator').pushPage('program.html', {
+                    data: { program }
+                  });
+                };
+                cardList.appendChild(card);
               });
-            });
-          });
+          };
+
+          searchInput.addEventListener('input', e => render(e.target.value));
+          render();
         });
-      });
     }
 
     if (page.id === 'program-page' && page.data && page.data.program) {
       const program = page.data.program;
+
       page.querySelector('#program-title').textContent = program.title;
       page.querySelector('#program-name').textContent = program.title;
       page.querySelector('#program-requirements').textContent = `Requirements: ${program.requirements}`;
 
       const timeline = page.querySelector('#timeline');
       const container = page.querySelector('#exercise-list');
+
+      let currentOpenExerciseIndex = -1;
+      let completedExercises = {};
+
       program.exercises.forEach((ex, i) => {
+        // Add timeline dot
         const dot = document.createElement('div');
         dot.className = 'dot';
         timeline.appendChild(dot);
 
-        const item = document.createElement('div');
-        item.className = 'exercise-item';
-        item.innerHTML = `
-          <div class="exercise-header">
-            <h3 class="exercise-title">${ex.name}</h3>
-          </div>
-          <div class="exercise-content">
-            <div class="exercise-details">
-              <div class="exercise-metrics">
-                <p class="metric-value">${ex.reps}</p>
-                <p class="metric-label">${ex.repUnits || 'reps'}</p>
-              </div>
-              <div class="exercise-metrics">
-                <p class="metric-value">${ex.sets}</p>
-                <p class="metric-label">sets</p>
-              </div>
-            </div>
-            <img class="exercise-gif" src="/static/${ex.gif}" alt="${ex.name}" />
-            ${ex.note ? `<p class="exercise-notes">Note: ${ex.note}</p>` : ''}
-          </div>`;
+        // Create exercise card
+        const card = document.createElement('ons-card');
+        card.className = 'exercise-item';
+        card.setAttribute('data-index', i);
+        card.style.padding = '0';
+        card.style.marginBottom = '12px';
 
-        container.appendChild(item);
+        const header = document.createElement('div');
+        header.className = 'exercise-header';
+        header.style.cursor = 'pointer';
+        header.style.display = 'flex';
+        header.style.alignItems = 'center';
+        header.style.justifyContent = 'space-between';
+        header.style.padding = '12px';
+        header.style.backgroundColor = '#eee';
+
+        const chevron = document.createElement('span');
+        chevron.className = 'chevron down';
+
+        const title = document.createElement('h3');
+        title.className = 'exercise-title';
+        title.textContent = ex.name;
+        title.style.margin = '0';
+        title.style.flexGrow = '1';
+
+        const status = document.createElement('div');
+        status.className = 'exercise-status';
+        status.style.width = '20px';
+        status.style.height = '20px';
+        status.style.border = '2px solid #aaa';
+        status.style.borderRadius = '50%';
+
+        header.appendChild(chevron);
+        header.appendChild(title);
+        header.appendChild(status);
+
+        const content = document.createElement('div');
+        content.className = 'exercise-content';
+        content.style.display = 'none';
+        content.style.padding = '12px';
+
+        // Exercise Details
+        const details = document.createElement('div');
+        details.className = 'exercise-details';
+        details.style.display = 'flex';
+        details.style.justifyContent = 'space-between';
+        details.style.marginBottom = '16px';
+
+        const reps = document.createElement('div');
+        reps.innerHTML = `<p class="metric-value">${ex.reps}</p><p class="metric-label">${ex.repUnits || 'reps'}</p>`;
+        reps.style.flex = '1';
+        reps.style.textAlign = 'center';
+
+        const sets = document.createElement('div');
+        sets.innerHTML = `<p class="metric-value">${ex.sets}</p><p class="metric-label">sets</p>`;
+        sets.style.flex = '1';
+        sets.style.textAlign = 'center';
+
+        details.appendChild(reps);
+        details.appendChild(sets);
+
+        // GIF
+        const gif = document.createElement('img');
+        gif.src = '/static/' + ex.gif;
+        gif.alt = ex.name;
+        gif.className = 'exercise-gif';
+        gif.style.width = '100%';
+        gif.style.borderRadius = '4px';
+
+        // Notes
+        const notes = document.createElement('p');
+        notes.className = 'exercise-notes';
+        if (ex.note) notes.textContent = 'Note: ' + ex.note;
+
+        content.appendChild(details);
+        content.appendChild(gif);
+        if (ex.note) content.appendChild(notes);
+
+        card.appendChild(header);
+        card.appendChild(content);
+        container.appendChild(card);
+
+        // Toggle logic
+        header.onclick = () => {
+          if (currentOpenExerciseIndex !== -1 && currentOpenExerciseIndex !== i) {
+            const prev = container.children[currentOpenExerciseIndex];
+            prev.querySelector('.exercise-content').style.display = 'none';
+            prev.querySelector('.chevron').classList.remove('up');
+            prev.querySelector('.chevron').classList.add('down');
+            timeline.children[currentOpenExerciseIndex].classList.remove('active');
+          }
+
+          const isOpen = content.style.display === 'block';
+          content.style.display = isOpen ? 'none' : 'block';
+          chevron.classList.toggle('up', !isOpen);
+          chevron.classList.toggle('down', isOpen);
+          timeline.children[i].classList.toggle('active', !isOpen);
+          currentOpenExerciseIndex = isOpen ? -1 : i;
+        };
+
+        // Completion toggle
+        status.onclick = (e) => {
+          e.stopPropagation();
+          card.classList.toggle('completed');
+          const isCompleted = card.classList.contains('completed');
+          completedExercises[i] = isCompleted;
+          timeline.children[i].classList.toggle('completed', isCompleted);
+        };
       });
     }
   });
