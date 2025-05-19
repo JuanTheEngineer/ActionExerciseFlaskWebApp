@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Inertia Workout App</title>
+  <link rel="stylesheet" href="https://unpkg.com/onsenui/css/onsenui.css">
+  <link rel="stylesheet" href="https://unpkg.com/onsenui/css/onsen-css-components.min.css">
+  <script src="https://unpkg.com/onsenui/js/onsenui.min.js"></script>
+</head>
+<body>
+<ons-navigator id="navigator" page="home.html"></ons-navigator>
+
+<!-- Home Tab with Navigation -->
+<template id="home.html">
+  <ons-page>
+    <ons-toolbar>
+      <div class="center">Inertia Workouts</div>
+    </ons-toolbar>
+    <ons-tabbar>
+      <ons-tab label="Home" icon="md-home" page="index.html" active></ons-tab>
+      <ons-tab label="Start" icon="md-play-circle" page="start.html"></ons-tab>
+      <ons-tab label="Programs" icon="md-search" page="programs.html"></ons-tab>
+      <ons-tab label="Glossary" icon="md-book" page="glossary.html"></ons-tab>
+    </ons-tabbar>
+  </ons-page>
+</template>
+
+<!-- Welcome Page -->
+<template id="index.html">
+  <ons-page>
+    <ons-toolbar><div class="center">Welcome</div></ons-toolbar>
+    <ons-card>
+      <div class="title">No More Excuses!</div>
+      <div class="content">
+        This site helps you skip the friction and get straight into smart training. Choose a program, learn the movements, and go.
+      </div>
+    </ons-card>
+  </ons-page>
+</template>
+
+<!-- Start Tab showing grouped plans -->
+<template id="start.html">
+  <ons-page id="start-page">
+    <ons-toolbar>
+      <div class="left"><ons-back-button>Home</ons-back-button></div>
+      <div class="center">Start a Workout</div>
+    </ons-toolbar>
+
+    <div id="plans-container" style="padding: 16px;">
+      <ons-progress-circular id="loading-spinner" indeterminate style="display: block; margin: 20px auto;"></ons-progress-circular>
+    </div>
+  </ons-page>
+</template>
+
+<script>
+  document.addEventListener('init', function(event) {
+    const page = event.target;
+
+    if (page.id === 'start-page') {
+      const container = page.querySelector('#plans-container');
+      const spinner = page.querySelector('#loading-spinner');
+
+      // Fetch data
+      fetch('/static/workouts.json').then(r => r.json()).then(workouts => {
+        fetch('/static/plans.json').then(r => r.json()).then(plans => {
+          spinner.style.display = 'none';
+
+          // Intro paragraph
+          const intro = document.createElement('ons-card');
+          intro.innerHTML = `
+            <div class="title">Workout Class</div>
+            <div class="content">
+              A variety of workout plans to try.
+              <a href="#strength">Strength</a> workouts push your muscles to their limits.
+              <a href="#agility">Agility</a> training improves quickness, vertical travel, and balance.
+              <a href="#other">Other</a> contains goal-specific or collaborative routines.
+            </div>`;
+          container.appendChild(intro);
+
+          // Render each plan
+          plans.plans.forEach(plan => {
+            const card = document.createElement('ons-card');
+            card.id = plan.name.toLowerCase(); // anchor
+            card.innerHTML = `<div class="title">${plan.name}</div><div class="content"><p>${plan.description}</p></div>`;
+
+            plan.subPlans.forEach(sub => {
+              const subHeader = document.createElement('h3');
+              subHeader.textContent = sub.name;
+              card.appendChild(subHeader);
+
+              if (sub.description) {
+                const subDesc = document.createElement('p');
+                subDesc.textContent = sub.description;
+                card.appendChild(subDesc);
+              }
+
+              const dl = document.createElement('dl');
+              sub.programs.forEach(pid => {
+                const program = workouts.programs.find(p => p.id === pid);
+                if (program) {
+                  const dt = document.createElement('dt');
+                  const a = document.createElement('a');
+                  a.href = "#";
+                  a.textContent = program.title;
+                  a.onclick = () => document.querySelector('#navigator').pushPage('program.html', { data: { program } });
+                  a.className = "links";
+                  dt.appendChild(a);
+
+                  const dd = document.createElement('dd');
+                  dd.textContent = "Requirements: " + program.requirements;
+
+                  dl.appendChild(dt);
+                  dl.appendChild(dd);
+                }
+              });
+
+              card.appendChild(dl);
+            });
+
+            container.appendChild(card);
+          });
+
+          if (plans.plans.length === 0) {
+            showErrorMessage();
+          }
+        }).catch(showErrorMessage);
+      }).catch(showErrorMessage);
+
+      function showErrorMessage() {
+        spinner.style.display = 'none';
+        const msg = document.createElement('ons-card');
+        msg.innerHTML = `
+          <div class="title">Plans Unavailable</div>
+          <div class="content">We couldn't load your plans right now. Please try again later or check your connection.</div>`;
+        container.appendChild(msg);
+      }
+    }
+  });
+</script>
+
+<!-- Program List -->
+<template id="programs.html">
+  <ons-page id="programs-page">
+    <ons-toolbar>
+      <div class="center">Programs</div>
+    </ons-toolbar>
+    <ons-list id="program-list"></ons-list>
+  </ons-page>
+</template>
+
+<!-- Individual Program View -->
+<template id="program.html">
+  <ons-page id="program-page">
+    <ons-toolbar>
+      <div class="left"><ons-back-button>Programs</ons-back-button></div>
+      <div class="center" id="program-title">Program Details</div>
+    </ons-toolbar>
+    <div id="page" class="content">
+      <h1 id="program-name"></h1>
+      <p id="program-requirements"></p>
+      <div class="timeline-container"><div id="timeline" class="timeline"></div></div>
+      <div id="exercise-list"></div>
+    </div>
+  </ons-page>
+</template>
+
+<!-- Glossary -->
+<template id="glossary.html">
+  <ons-page>
+    <ons-toolbar><div class="center">Glossary</div></ons-toolbar>
+    <ons-list>
+      <ons-list-item expandable>AMRAP<ons-icon icon="md-arrow-drop-down" slot="expandable-icon"></ons-icon>
+        <div class="expandable-content">As Many Reps As Possible</div></ons-list-item>
+      <ons-list-item expandable>KB<ons-icon icon="md-arrow-drop-down" slot="expandable-icon"></ons-icon>
+        <div class="expandable-content">Kettle Bells</div></ons-list-item>
+      <ons-list-item expandable>RPE<ons-icon icon="md-arrow-drop-down" slot="expandable-icon"></ons-icon>
+        <div class="expandable-content">Rate of Perceived Exertion (1–10)</div></ons-list-item>
+      <ons-list-item expandable>TKE<ons-icon icon="md-arrow-drop-down" slot="expandable-icon"></ons-icon>
+        <div class="expandable-content">Terminal Knee Extension</div></ons-list-item>
+      <ons-list-item expandable>Super Set<ons-icon icon="md-arrow-drop-down" slot="expandable-icon"></ons-icon>
+        <div class="expandable-content">Two exercises done back to back without rest</div></ons-list-item>
+    </ons-list>
+  </ons-page>
+</template>
+
+<script>
+  document.addEventListener('init', function(event) {
+    const page = event.target;
+
+    if (page.id === 'programs-page') {
+      fetch('/static/workouts.json')
+        .then(r => r.json())
+        .then(data => {
+          const list = page.querySelector('#program-list');
+          data.programs.forEach(program => {
+            const item = document.createElement('ons-list-item');
+            item.setAttribute('tappable', '');
+            item.innerHTML = `<div class="center">${program.title}</div>`;
+            item.onclick = () => document.querySelector('#navigator').pushPage('program.html', {data: {program}});
+            list.appendChild(item);
+          });
+        });
+    }
+
+    if (page.id === 'start-page') {
+      fetch('/static/workouts.json').then(r => r.json()).then(workouts => {
+        fetch('/static/plans.json').then(r => r.json()).then(plans => {
+          const list = page.querySelector('#plans-list');
+          plans.plans.forEach(plan => {
+            const header = document.createElement('ons-list-header');
+            header.textContent = plan.name;
+            list.appendChild(header);
+            plan.subPlans.forEach(sub => {
+              sub.programs.forEach(pid => {
+                const program = workouts.programs.find(p => p.id === pid);
+                if (program) {
+                  const item = document.createElement('ons-list-item');
+                  item.setAttribute('tappable', '');
+                  item.innerHTML = `<div class="center">${program.title}</div>`;
+                  item.onclick = () => document.querySelector('#navigator').pushPage('program.html', {data: {program}});
+                  list.appendChild(item);
+                }
+              });
+            });
+          });
+        });
+      });
+    }
+
+    if (page.id === 'program-page' && page.data && page.data.program) {
+      const program = page.data.program;
+      page.querySelector('#program-title').textContent = program.title;
+      page.querySelector('#program-name').textContent = program.title;
+      page.querySelector('#program-requirements').textContent = `Requirements: ${program.requirements}`;
+
+      const timeline = page.querySelector('#timeline');
+      const container = page.querySelector('#exercise-list');
+      program.exercises.forEach((ex, i) => {
+        const dot = document.createElement('div');
+        dot.className = 'dot';
+        timeline.appendChild(dot);
+
+        const item = document.createElement('div');
+        item.className = 'exercise-item';
+        item.innerHTML = `
+          <div class="exercise-header">
+            <h3 class="exercise-title">${ex.name}</h3>
+          </div>
+          <div class="exercise-content">
+            <div class="exercise-details">
+              <div class="exercise-metrics">
+                <p class="metric-value">${ex.reps}</p>
+                <p class="metric-label">${ex.repUnits || 'reps'}</p>
+              </div>
+              <div class="exercise-metrics">
+                <p class="metric-value">${ex.sets}</p>
+                <p class="metric-label">sets</p>
+              </div>
+            </div>
+            <img class="exercise-gif" src="/static/${ex.gif}" alt="${ex.name}" />
+            ${ex.note ? `<p class="exercise-notes">Note: ${ex.note}</p>` : ''}
+          </div>`;
+
+        container.appendChild(item);
+      });
+    }
+  });
+</script>
+</body>
+</html>
